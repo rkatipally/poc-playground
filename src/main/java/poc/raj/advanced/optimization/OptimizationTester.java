@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +23,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class OptimizationTester {
-    public final static String[] optimizationFields = new String[]{ "fareClasses", "footnote"};
+    public final static String[] keyFields = new String[]{ "origin", "destination", "carrier","fareClasses", "footnote", "passengerTypeCode"};
+    public final static String[] optimizationFields = new String[]{ "footnote","passengerTypeCode", "fareClasses"};
     private static final String COMMA_DELIMITER = ",";
 
     public static void main(String[] args) {
@@ -36,7 +36,7 @@ public class OptimizationTester {
 
         List<UIFareSearchCriteria> criteriaList = new ArrayList<>();
         criteriaList.add(UIFareSearchCriteria.builder().origin("WAS").destination("LON").carrier("AA").footnote("FN1").build());
-        criteriaList.add(UIFareSearchCriteria.builder().origin("WAS").destination("LON").carrier("BA").footnote("FN2").build());
+        criteriaList.add(UIFareSearchCriteria.builder().origin("WAS").destination("LON").carrier("AA").footnote("FN2").build());
 
         criteriaList.add(UIFareSearchCriteria.builder().origin("LON").fareClasses("ABC,DEF").carrier("BA").footnote("DL").outboundDate(Optional.of(LocalDate.now())).build());
 
@@ -81,6 +81,8 @@ public class OptimizationTester {
             Collections.sort(l2);
 
             if (l1.equals(l2)) return 0;
+            else if (StringUtils.isEmpty(filter1)) return 1;
+            else if (StringUtils.isEmpty(filter2)) return 2;
             else if (Arrays.asList(filter1).containsAll(Arrays.asList(filter2))) return 1;
             else if (Arrays.asList(filter2).containsAll(Arrays.asList(filter1))) return 2;
             else return -1;
@@ -88,24 +90,30 @@ public class OptimizationTester {
 
         Map<Integer, Long> counts = subsets.stream().collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 
-        if (counts.getOrDefault(-1, 0L) == subsets.size()) return Arrays.asList(criteria1, criteria2);
+        if (counts.getOrDefault(-1, 0L) == subsets.size() && subsets.size() != 1) return Arrays.asList(criteria1, criteria2);
         else if (counts.getOrDefault(0, 0L) == subsets.size()) return Arrays.asList(criteria1);
         else if (counts.getOrDefault(1, 0L) == subsets.size() || counts.getOrDefault(0, 0L) + counts.getOrDefault(1, 0L) == subsets.size())
             return Arrays.asList(criteria1);
         else if (counts.getOrDefault(2, 0L) == subsets.size() || counts.getOrDefault(0, 0L) + counts.getOrDefault(2, 0L) == subsets.size())
             return Arrays.asList(criteria2);
         else if (counts.getOrDefault(-1, 0L) + counts.getOrDefault(0, 0L) == counts.size()) {
-            criteria1.put(filtersToOptimize.get(subsets.indexOf(-1)),
-                    String.join(COMMA_DELIMITER,
-                            Sets.newHashSet((criteria1.get(filtersToOptimize.get(subsets.indexOf(-1)))
-                                    + COMMA_DELIMITER + criteria2.get(filtersToOptimize.get(subsets.indexOf(-1)))).split(COMMA_DELIMITER))));
-            return Arrays.asList(criteria1);
+            String filterKey = filtersToOptimize.get(subsets.indexOf(-1));
+            if(StringUtils.isEmpty(criteria1.get(filterKey))) return Arrays.asList(criteria1);
+            else if(StringUtils.isEmpty(criteria2.get(filterKey))) return Arrays.asList(criteria2);
+            else{
+                criteria1.put(filterKey,
+                        String.join(COMMA_DELIMITER,
+                                Sets.newHashSet((criteria1.get(filterKey)
+                                        + COMMA_DELIMITER + criteria2.get(filterKey)).split(COMMA_DELIMITER))));
+                return Arrays.asList(criteria1);
+            }
+
         } else return Arrays.asList(criteria1, criteria2);
 
     }
 
     public static String getGroupKey(Map<String, String> criteria, Set<String> excludeSet) {
-        return Arrays.asList(optimizationFields).stream()
+        return Arrays.asList(keyFields).stream()
                 .filter(f -> !excludeSet.contains(f))
                 .map(f -> criteria.get(f))
                 .filter(s -> !Objects.isNull(s))
